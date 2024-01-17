@@ -1,0 +1,858 @@
+---
+title: 'Minería de datos: PEC1'
+author: "Autor: Alejandro Sánchez Gómez"
+date: "octubre 2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# ENUNCIADO
+
+A partir del juego de datos utilizado en el ejemplo anterior, realiza las tareas previas a la generación de un modelo de minería de datos explicadas en los módulos "El proceso de minería de datos" y "Preprocesado de los datos y gestión de características".
+
+Puedes utilizar de referencia el ejemplo anterior, pero procura cambiar el enfoque y analizar los datos en función de las diferentes dimensiones que presentan los datos.
+
+Opcionalmente y valorable se pueden añadir al estudio datos de otros años para realizar comparaciones temporales (<https://www.nhtsa.gov/file-downloads?p=nhtsa/downloads/FARS/>) o añadir otros hechos a estudiar relacionados, por ejemplo, el consumo de drogas en los accidentes (<https://static.nhtsa.gov/nhtsa/downloads/FARS/2020/National/FARS2020NationalCSV.zip>)
+
+# RESPUESTA
+
+## PRESENTACIÓN DEL CASO
+
+### PRÉAMBULO
+
+Esta prueba de evaluación continuada cubre los módulos "El proceso de minería de datos" y "Preprocesado de los datos y gestión de características" del programa de la asignatura.
+
+### DESCRIPCIÓN DE LOS DATOS
+
+<https://www.nhtsa.gov/crash-data-systems/fatality-analysis-reporting-system>
+
+Se trata dos un conjuntos de registros, uno sobre accidentes de tráfico ocurridos en el año 2020 con datos que los describen, y otro sobre la víctima fatal del accidente. Todos los accidentes tienen alguna víctima mortal como mínimo.
+
+Estos datos han sido recogidos forman el denominado sistema de informes de análisis de mortalidad, el cual fue creado en los Estados Unidos por la National Highway Traffic Safety Administration para proporcionar una medida global de la seguridad en las carreteras.
+
+### OBJETIVO ANALÍTICO
+
+El objetivo analítico es analizar cual es el factor que más influye a la hora de que suceden víctimas en un accidente de tráfico.
+
+Mi hipótesis es que hay dos tipos de accidente mortal:
+
+1.  En el primer tipo el accidente es tal que la víctima sufre de muerte cerebral o permanente de forma instantánea debido a la gravedad del impacto.
+
+2.  En el segundo tipo (el más frecuente), el accidente no causa en la víctima muerte cerebral o permanente de forma instantánea, sino parada cardíaca.
+
+La parada cardiaca puede ser reversible si se trata en pocos minutos con una descarga eléctrica y una intervención de SVA para restablecer un ritmo cardiaco normal. Tal y como dictamina la American Heart Association, la muerte cerebral y la muerte permanente empiezan a producirse entre 4 y 6 minutos después de que alguien sufra una parada cardiaca. Otros estudian demuestran que las posibilidades de supervivencia de una víctima se reducen entre un 7% y un 10% por cada minuto que pasa sin desfibrilación e intervención de soporte vital avanzado. Pocos intentos de reanimación tienen éxito después de 10 minutos.
+
+Vemos pues que, si la hipótesis es correcta, el factor más determinante a la hora de estudiar la mortalidad en carretera no es fijarse en aquello que produce el accidente, sino ver como actuan los servicios de emergencia una vez este ocurre.
+
+Por tanto, el objetivo analítico es el siguiente:
+
+-   Analizar si los dos escenarios planteados suceden.
+-   Analizar si la frecuencia de los escenarios es la hipotetizada.
+-   Analizar la distribución de los tiempos de respuesta de los servicios de emergencia en base a los tiempos necesarios para una correcta reversión de la parada cardíaca.
+-   Analizar si hay una correlación entre los tiempos de respuesta y el aumento de víctimas mortales de un accidente de tráfico.
+
+## ANÁLISIS EXPLORATORIO
+
+### CARGANDO LOS DATOS
+
+El primer paso para realizar un análisis exploratorio es cargar el fichero de datos:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+accidentData <- read.csv("./data/accident.CSV")
+personData <- read.csv("./data/person.CSV")
+personData <- personData[c("ST_CASE", "DOA", "PER_NO", "DEATH_TM", "LAG_HRS", "LAG_MINS", "INJ_SEV", "HOSPITAL", "PER_TYP")]
+```
+
+### EL CONJUNTO DE DATOS
+
+Verificamos la estructura del juego de datos principal viendo el número de columnas que tenemos y ejemplos de los contenidos de las filas, luego, revisamos la descripción de las variables contenidas en el fichero y si los tipos de variables se corresponden con las que hemos cargado. Las organizamos lógicamente para darles sentido y construimos un pequeño diccionario de datos utilizando la documentación auxiliar.
+
+#### ACCIDENT DATA
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+str(accidentData)
+```
+
+Vemos que tenemos **81** variables y **35.766** registros
+
+-   **ST_CASE** identificador de accidente
+
+**HECHOS A ESTUDIAR**
+
+-   **FATAL** muertes
+-   **DRUNK_DR** conductores bebidos
+-   **VE_TOTAL** número de vehículos implicados en total
+-   **VE_FORMS** número de vehículos en movimiento implicados
+-   **PVH_INVL** número de vehículos estacionados implicados
+-   **PEDS** número de peatones implicados
+-   **PERSONS** número de ocupantes de vehículo implicados
+-   **PERMVIT** número conductores y ocupantes implicados
+-   **PERNOTMVIT** número peatones, ciclistas, a caballo... Cualquier cosa menos vehículo motorizado
+
+**DIMENSIÓN GEOGRÁFICA**
+
+-   **STATE** codificación de estado
+-   **STATENAME** nombre de estado
+-   **COUNTY** identificador de contado
+-   **COUNTYNAME** condado
+-   **CITY** identificador de ciudad
+-   **CITYNAME** ciudad
+-   **NHS** 1 ha pasado a autopista del NHS 0 no
+-   **NHSNAME** TBD
+-   **ROUTE** identificador de ruta
+-   **ROUTENAME** ruta
+-   **TWAY_ID** vía de tránsito (1982)
+-   **TWAY_ID2** vía de tránsito (2004)
+-   **RUR_URB** identificador de segmento rural o urbano
+-   **RUR_URBNAME** segmento rural o urbano
+-   **FUNC_SYS** clasificación funcional segmento
+-   **FUNC_SYSNAME** TBD
+-   **RD_OWNER** identificador propietario del segmento
+-   **RD_OWNERNAME** propietario del segmento
+-   **MILEPT** milla int
+-   **MILEPTNAME** milla chr
+-   **LATITUDE** latitud int
+-   **LATITUDENAME** latitud chr
+-   **LONGITUD** longitud int
+-   **LONGITUDNAME** longitud chr
+-   **SP_JUR** código jurisdicción
+-   **SP_JURNAME** jurisdicción
+
+**DIMENSIÓN TEMPORAL**
+
+-   **DAY** día
+-   **DAYNAME** día repetido
+-   **MONTH** mes
+-   **MONTHNAME** nombre de mes
+-   **YEAR** año
+-   **DAY_WEEK** día de la semana
+-   **DAY_WEEKNAME** nombre de día de la semana
+-   **HOUR** hora
+-   **HOURNAME** franja hora
+-   **MINUTE** minuto int
+-   **MINUTENAME** minuto chr
+
+**DIMENSIÓN CONDICICIONES ACCIDENTE**
+
+-   **HARM_EV** código primer acontecimiento del accidente que produzca daños o lesiones
+-   **HARM_EVNAME** primer acontecimiento del accidente que produzca daños o lesiones
+-   **MAN_COLL** código de posición de los vehículos
+-   **MAN_COLLNAME** posición de los vehículos
+-   **RELJCT1** código si hay área de intercambio
+-   **RELJCT1NAME** si hay área de intercambio
+-   **RELJCT2** código proximidad cruce
+-   **RELJCT2NAME** proximidad cruce
+-   **TYP_INT** código tipo de intersección
+-   **TYP_INTNAME** tipo de intersección
+-   **WRK_ZONE** código tipología de obras
+-   **WRK_ZONENAME** tipología de obras
+-   **RAIL_ROAD** código ubicación vehículo a la vía
+-   **RAIL_ROADNAME** ubicación vehículo a la vía
+-   **LGT_COND** código condición lumínica
+-   **LGT_CONDNAME** condición lumínica
+
+**DIMENSIÓN METEOROLOGIA**
+
+-   **WEATHER** código tiempo
+-   **WEATHERNAME** tiempo
+
+**OTROS**
+
+-   **SCH_BUSS** código si vehículo escolar implicado
+-   **SCH_BUSNAME** vehículo escolar implicado
+-   **RAIL** código si dentro o cerca paso ferroviario
+-   **RAILNAME** si dentro o cerca paso ferroviario
+
+**DIMENSIÓN SERVICIO EMERGENCIAS**
+
+-   **NOT_HOUR** hora notificación a emergencias int
+-   **NOT_HOURNAME** hora notificación a emergencias franja
+-   **NOT_MIN** minuto notificación a emergencias int
+-   **NOT_MINNAME** minuto notificación a emergencias chr
+-   **ARR_HOUR** hora llegada emergencias int
+-   **ARR_HOURNAME** hora llegada emergencias franja
+-   **ARR_MIN** minuto llegada emergencias int
+-   **ARR_MINNAME** minuto llegada emergencias franja
+-   **HOSP_HR** hora llegada hospital int
+-   **HOSP_HRNAME** hora llegada hospital franja
+-   **HOSP_MN** minuto llegada hospital int
+-   **HOSP_MNNAME** minuto llegada hospital franja
+
+**DIMENSIÓN FACTORES RELACIONADOS ACCIDENTE**
+
+-   **CF1** código factores relacionados con el accidente 1
+-   **CF1NAME** factores relacionados con el accidente 1
+-   **CF2** código factores relacionados con el accidente 2
+-   **CF2NAME** factores relacionados con el accidente 2
+-   **CF3** código factores relacionados con el accidente 3
+
+#### PERSON DATA
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+str(personData)
+```
+
+Vemos que tenemos **5** variables y **86396** registros.
+
+-   **ST_CASE** identificador de accidente
+-   **PER_NO** identificador de persona afectada por el accidente
+-   **PER_TYP**
+
+**DIMENSIÓN FACTORES RELACIONADOS CON LA GRAVEDAD DEL ACCIDENTE**
+
+-   **DOA** identificador de momento de la muerte con respecto al accidente
+-   **INJ_SEV** identificador de tipo de herida sufrida por la víctima
+
+**DIMENSIÓN FACTORES RELACIONADOS CON LA MUERTE DE LA VÍCTIMA**
+
+-   **DEATH_TM** hora y minuto del fallecimiento de la víctima
+-   **LAG_HRS** horas del fallecimiento después del accidente
+-   **LAG_MINS** minutos del fallecimiento después del accidente
+
+**DIMENSIÓN FACTORES RELACIONADOS CON EL TRANSPORTE DE LA VÍCTIMA**
+
+-   **HOSPITAL** método de transporte de la víctima accidentada
+
+## PREPROCESAMIENTO Y GESTIÓN DE CARACTERÍSTICAS
+
+### UNION DE CONJUNTOS DE DATOS
+
+Una vez tenemos los datos, los unimos en una sola tabla:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+mergedData <- merge(x = accidentData, y = personData, by = "ST_CASE")
+str(mergedData)
+```
+
+Vemos que tenemos **85** variables y **86396** registros
+
+### LIMPIEZA
+
+#### VALORES VACÍOS
+
+Analizamos los valores vacíos: si hay, como se distribuyen ...
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+colSums(mergedData=="")
+```
+
+**TWAY_ID2** tiene aproximadamente el 70% de datos vacíos. Puesto que eliminar los registros por lo que eliminaremos la variable en vez de eliminar los registros:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+mergedData <- select(mergedData, !contains("TWAY_ID2"))
+```
+
+#### VALORES REPETIDOS
+
+Comprobamos si se repiten datos a partir de la características ST_CASE y PER_NO:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+if (!require("tidyr")) install.packages("tidyr"); 
+library('tidyr')
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+
+mergedDataAux <- unite(mergedData, ST_CASE, PER_NO, col="id", sep=".")
+
+count(distinct(mergedDataAux))
+
+mergedData <- mergedData[!duplicated(mergedDataAux$id), ]
+```
+
+De **86396** registros pasamos a **57779** registros: todos los datos repetidos han sido eliminados.
+
+#### VALORES NULOS
+
+Comprobamos la cantidad de valores nulos que alberga el conjunto de datos:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+colSums(is.na(mergedData))
+```
+
+Al no haber datos nulos, no eliminamos ninguna fila.
+
+## ANÁLISIS
+
+### OBJETIVO 1 y 2 DEL ANÁLISIS
+
+**DEATH_TM**
+
+El atributo ha estudiar nos permitirá distinguir entre aquellas personas que fallecieron en el accidente con las que no, así, podremos determinar si el tiempo de emergencia tuvo un impacto significativo en ello.
+
+Para ello, debemos transformar el atributo nominal a ordinal, pues sabemos que si el valor es de '8888', esta no ha fallecido:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+
+mergedData <- mutate(mergedData, DEATH_TM=
+                          ifelse(DEATH_TM<8888, 1, 
+                                 ifelse(DEATH_TM==8888, 2, 3))
+                        )
+```
+
+A continuación visualizaremos la distribución de la variable:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+ggplot( data = mergedData, aes(DEATH_TM)) + geom_bar(aes(y = (..count..)/sum(..count..)))
+```
+
+Podemos observar lo siguiente:
+
+1.  Algo más del 40% de implicados en accidentes mortales sobrevivieron.
+2.  Algo menos del 60% de implicados en accidentes mortales fallecen.
+
+Separaremos los grupos de estudio en dos, aquellos que fueron víctimas mortales con aquellos que no lo fueron:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+mergedData_death <- subset(mergedData, DEATH_TM==1)
+mergedData_alive <- subset(mergedData, DEATH_TM==2)
+
+```
+
+**INJ_SEV**
+
+La hipótesis planteada discierne dos escenarios fatales, pero ambos implican heridas fatales. Por lo tanto, analizaremos lo planteado a partir del tipo de herida la víctima implicada en el accidente:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+# mergedData_death
+table(mergedData_death$INJ_SEV)
+plot <- ggplot( data = mergedData_death, aes(INJ_SEV)) + geom_bar(aes(y = (..count..)/sum(..count..)))
+plot
+
+# mergedData_alive
+table(mergedData_alive$INJ_SEV)
+plot <- ggplot( data = mergedData_alive, aes(INJ_SEV)) + geom_bar(aes(y = (..count..)/sum(..count..)))
+plot
+
+```
+
+Observamos que, aquellas víctimas que sobrevivieron, presentan tipos de heridas no considerados fatales en la mayoría de los casos, mientras que las que no lo hicieron todas presentan heridas fatales.
+
+Por tanto, se concluye que el tipo de herida está correlacionado con la fatalidad y que la hipótesis se mantiene.
+
+**DOA**
+
+Al observar que todas las víctimas mortales sufrieron de heridas fatales, podemos confirmar o desmentir la existencia de los dos escenarios planteados. Para ello, analizaremos el atributo **DOA** para clasificar aquellos que fallecieron en el acto versus aquellos que fallecieron después:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+# Tabla
+table(mergedData_death$DOA)
+
+# Plot
+ggplot( data = mergedData_death, aes(DOA)) + geom_bar(aes(y = (..count..)/sum(..count..)))
+```
+
+Observamos lo siguiente:
+
+1.  Algo más del 40% falleció después de llegar al hospital (DOA == 0).
+2.  Algo menos del 60% falleció al instante del accidente (DOA == 7).
+3.  Los casos que murieron durante el transporte al hospital son pocos, menos del 1% (DOA == 8).
+
+Con esta observacion podemos concluir como estudiado tanto el primer punto como el segundo punto de la hipótesis planteada, además, concluimos que los escenarios planteados no son del todo correctos, pues fallecen más personas en el acto que debido a las heridas.
+
+Para poder estudiar mejor el tercer y cuarto argumento de la hipótesis planteada, observaremos la influencia que tienen los servicios de emergencia en el caso de que la víctima no fallezca de forma instantánea:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+
+mergedData_death_by_injury = subset(mergedData_death, DOA == 0 )
+```
+
+### OBJETIVO 3 Y 4 DEL ANÁLISIS
+
+#### COMENZANDO EL ANÁLISIS
+
+**TIEMPOS DE EMERGENCIA**
+
+A continuación, realizamos una observación superficial de los datos que influeyen en el tiempo de respuesta:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+n = c("HOUR","MINUTE","NOT_HOUR","NOT_MIN","ARR_HOUR","ARR_MIN")
+histList<- list()
+
+#cuartiles
+summary(mergedData_death_by_injury[n])
+
+#histogramas
+dataAux = mergedData_death_by_injury %>% select(all_of(n))
+
+for(y in 1:ncol(dataAux)){
+  
+  col <- names(dataAux)[y]
+  
+  ggp <- ggplot(
+            dataAux, aes_string(x = col)
+          ) +
+          geom_bar(
+            aes(y = (..count..)/sum(..count..))
+          )
+  
+  histList[[y]] <- ggp
+}
+
+histList[1:6]
+
+```
+
+Para poder estudiar los tiempos de respuesta, necesitamos emplear el atributo **NOT_HOUR**, pero se observa que aproximadamente un 50% de los datos es desconocido.
+
+No podemos simplemente eliminar estos datos no disponibles, pues no sabemos si la causa de esto es aleatoria o bien explica algo importante para nuestro estudio.
+
+#### ANALIZANDO LAS NOTIFICACIONES VACÍAS
+
+##### ESTUDIANDO LAS CORRELACIONES
+
+Para encontrar una posible causa, aplicaremos el coeficiente de correlación de Parson en los casos que produzcan esta no disponibilidad al resto de atributos disponibles:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+library(correlation)
+
+dataAux = select_if(mergedData_death_by_injury, is.numeric)
+
+options(max.print = 9999)
+
+round(cor(dataAux),
+  digits = 2 # rounded to 2 decimals
+)
+
+```
+
+De acuerdo con Dancey y Reidy, 2004, una correlación de Pearson de más de 0.30 se considera moderada, y menos de eso se considera débil o negligible. Sólo estudiaremos el rango de moderado hacia arriba.
+
+Las variables que mayor correlación muestran a priori son las siguientes:
+
+1.  RD_OWNER (0.35)
+2.  LATITUDE (-0.31)
+
+Descartamos aquellas relacionadas con los tiempos de llegada de los servicios de emergencia y del hospital, pues se sobreentiende que estos se relacionan debido a que sucede después de la notificación.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+
+dataAux = subset(mergedData_death_by_injury, NOT_HOUR >= 88)
+
+```
+
+**RD_OWNER**
+
+Observaremos como actuan los valores vacíos en RD_OWNER
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+summary(dataAux$RD_OWNER)
+
+plot <- ggplot(
+    data = dataAux, 
+    aes(RD_OWNER)
+  ) + geom_bar(aes(y = (..count..)/sum(..count..))) 
+plot 
+
+freq_table <- table(dataAux$RD_OWNER)
+freq_df <- data.frame(
+  value = as.numeric(names(freq_table)), 
+  frequency = as.numeric(round(freq_table/sum(freq_table), 2))
+  )
+sorted_freq_df <- freq_df[order(-freq_df$frequency), ]
+sorted_freq_df
+
+```
+
+Observamos lo siguiente:
+
+1.  El 48% sucedió en una autopista de la agencia estatal.
+2.  En el 30% de casos no hay ningún dato apuntado.
+3.  En el 13% sucedió en una autopista perteneciente a una ciudad o municipio.
+4.  En el 07% sucedió en una autopista perteneciente al condado.
+
+Si sumamos los porcentages, observamos que aproximadamente un 70% de los casos suceden en una autopista.
+
+**LATITUDE**
+
+Si bien la correlación sólo indica una fuerte asociación con la latitud, investigaremos conjuntamente la longitud para determinar el área donde esto sucede:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+dataAux_lat = subset(dataAux, LATITUDE < 88)
+
+summary(dataAux_lat$LATITUDE)
+
+plot <- ggplot(
+    data = dataAux_lat, 
+    aes(LATITUDE)
+  ) + geom_histogram() 
+plot 
+
+```
+
+Observamos que el mayor grosor de datos vacíos (75%) se corresponde entre 30.4N y 38.6N. Esta altitud se corresponde con los estados del sur.
+
+Cabe anotar que si uno conoce la climatología de estados unidos, observará que estas altitudes corresponden a las zonas más cálidas del país. Por lo que es posible que haya una conexión con la temperatura. Esto se aleja del estudio actual pero resultaría interesante estudiarlo en el futuro.
+
+##### HIPÓTESIS
+
+La hipótesis que planteo es que estos casos no notificados suceden debido a accidentes en autopistas remotas donde nadie ha podido llamar a emergencias, pero fueron encontrados más adelantes por la policia, o bien que hubo un atropeyo y el conductor se dio a la fuga.
+
+Podemos deducirlo parcialmente investigando si el accidentado no involucró a nadie y mediante el número de peatones afectados:
+
+**PERNOTMVIT, PER_TYP**
+
+Estudiaremos si hubo peatones involucrados en el accidente:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+#tipo de persona
+summary(dataAux$PER_TYP)
+
+plot <- ggplot(
+    data = dataAux, 
+    aes(MAN_COLL)
+  ) + geom_bar(aes(y = (..count..)/sum(..count..)))
+plot
+
+freq_table <- table(dataAux$PER_TYP)
+freq_df <- data.frame(
+  value = as.numeric(names(freq_table)), 
+  frequency = as.numeric(round(freq_table/sum(freq_table), 2))
+  )
+sorted_freq_df <- freq_df[order(-freq_df$frequency), ]
+sorted_freq_df
+
+#numero peatones
+summary(dataAux$PERNOTMVIT)
+
+plot <- ggplot(
+    data = dataAux, 
+    aes(MAN_COLL)
+  ) + geom_bar(aes(y = (..count..)/sum(..count..)))
+plot
+
+freq_table <- table(dataAux$PERNOTMVIT)
+freq_df <- data.frame(
+  value = as.numeric(names(freq_table)), 
+  frequency = as.numeric(round(freq_table/sum(freq_table), 2))
+  )
+sorted_freq_df <- freq_df[order(-freq_df$frequency), ]
+sorted_freq_df
+
+```
+
+Se observa lo siguiente:
+
+1.  En el 75% de los casos no hubo ningún peatón involucrado.
+2.  En el 23% de los casos sólo hubo peatón involucrado.
+
+**MAN_COLL**
+
+Observaremos que tipo de accidente se produjo.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+summary(dataAux$MAN_COLL)
+plot <- ggplot(
+    data = dataAux, 
+    aes(MAN_COLL)
+  ) + geom_bar(aes(y = (..count..)/sum(..count..)))
+plot
+
+freq_table <- table(dataAux$MAN_COLL)
+freq_df <- data.frame(
+  value = as.numeric(names(freq_table)), 
+  frequency = as.numeric(round(freq_table/sum(freq_table), 2))
+  )
+sorted_freq_df <- freq_df[order(-freq_df$frequency), ]
+sorted_freq_df
+
+```
+
+Se observa lo siguiente:
+
+1.  68% no colisionó con otro vehículo.
+2.  17% colisión de ángulo con otro vehículo.
+3.  6% colisionó de frente con otro vehículo.
+4.  6% colision de espalda con otro vehículo.
+
+**FATALS**
+
+Observaremos cuantos muertos hubo en este tipo de accidentes.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+summary(dataAux$FATALS)
+plot <- ggplot(
+    data = dataAux, 
+    aes(MAN_COLL)
+  ) + geom_bar(aes(y = (..count..)/sum(..count..)))
+plot
+
+freq_table <- table(dataAux$FATALS)
+freq_df <- data.frame(
+  value = as.numeric(names(freq_table)), 
+  frequency = as.numeric(round(freq_table/sum(freq_table), 2))
+  )
+sorted_freq_df <- freq_df[order(-freq_df$frequency), ]
+sorted_freq_df
+
+```
+
+En más del 90% de los casos hubo sólo un fallecido, en el 7% dos.
+
+##### CONCLUSIÓN
+
+Se observa como el 70% de occurencias suceden en autopistas, como el 23% de los casos un peatón está involucrado, como un 68% de casos el vehiculo no sufre accidente con otro vehículo, y en el 90% de los casos hay por lo menos un fallecido.
+
+Concluyo que, en los casos de accidentes no reportados, se debe al atropello de un peatón o bien a una colisión donde nadie pudo notificar salvo los cuerpos de seguridad. Todo esto sucede en regiones del sur de estados unidos.
+
+##### SIGUIENTES PASOS
+
+Se decide considerar estos registros como llegada tardía de la ambulancia.
+
+### CATEGORIZANDO LOS TIEMPOS DE RESPUESTA
+
+Derivaremos tres nuevos atributos con el objetivo de calcular los tiempos de respuesta.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+if (!require("tidyr")) install.packages("tidyr"); 
+library('tidyr')
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+
+# Unificamos atributos
+mergedData = unite(mergedData, HOUR, MINUTE, col="TIME_ACCIDENT", sep=":")
+mergedData = unite(mergedData, NOT_HOUR, NOT_MIN, col="TIME_NOTIFICATION", sep=":")
+mergedData = unite(mergedData, ARR_HOUR, ARR_MIN, col="TIME_ARRIVAL", sep=":")
+
+```
+
+Una vez unificamos los tiempos, podemos calcular el tiempo de respuesta:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+
+mergedData <- mutate(mergedData, 
+  RESPONSE_TIME = 
+    ifelse(
+      as.numeric(difftime(as.POSIXct(TIME_ARRIVAL, format = "%H:%M"), 
+                           as.POSIXct(TIME_ACCIDENT, format = "%H:%M"),
+                          units = "mins")) >= 0
+      , as.numeric(difftime(as.POSIXct(TIME_ARRIVAL, format = "%H:%M"), 
+                           as.POSIXct(TIME_ACCIDENT, format = "%H:%M"),
+                          units = "mins"))
+      , as.numeric(difftime(as.POSIXct(TIME_ARRIVAL, format = "%H:%M"), 
+                           as.POSIXct(TIME_ACCIDENT, format = "%H:%M"),
+                          units = "mins")) + 60*24
+  )
+)
+```
+
+Ahora podemos derivar nuevos atributos que clasifican los tiempos de respuesta en función de los rangos establecidos en la hipótesis:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) install.packages("dplyr"); 
+library('dplyr')
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+mergedData <- mutate(mergedData, 
+  RESPONSE_CATEGORY = 
+    ifelse( is.na(RESPONSE_TIME), 0,
+      ifelse( RESPONSE_TIME < 2, 1, 
+        ifelse( RESPONSE_TIME < 4, 2, 
+          ifelse( RESPONSE_TIME < 6, 3, 
+            ifelse( RESPONSE_TIME < 8, 4, 5
+            )
+          )
+        )
+      )
+    )
+)
+
+summary(mergedData["RESPONSE_CATEGORY"])
+
+plot <- ggplot(
+    data = mergedData, 
+    aes(RESPONSE_CATEGORY)
+  ) + geom_bar(aes(y = (..count..)/sum(..count..)))
+plot
+
+freq_table <- table(mergedData$RESPONSE_CATEGORY)
+freq_df <- data.frame(
+  value = names(freq_table), 
+  frequency = as.numeric(round(freq_table/sum(freq_table), 2))
+  )
+freq_df
+```
+
+Se pueden llegar a las siguientes conclusiones con respecto a los tiempos establecidos por la American Heart Asociation:
+
+1.  Un 8% se encuentra dentro del límite establecido (menos de 6 minutos).
+2.  Un 14% se encuentra en el rango de posible resurección (menos de 8 minutos).
+3.  En el 31% de los casos se supera la posible resurección.
+4.  Más de la mitad de los casos no es posible determinar cuando llegan los servicios de emergencia.
+
+### CORRELACIONES FINALES
+
+**FATALS**
+
+Comprobemos si la mortalidad y las categorías de los tiempos de respuesta tienen una correlación aparente.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+mergedData_death <- subset(mergedData, DEATH_TM == 1)
+mergedData_death_by_injury = subset(mergedData_death, DOA == 0 )
+
+ggplot(mergedData_death, aes(y=(ST_CASE/sum(ST_CASE)), x=RESPONSE_CATEGORY)) + geom_col() 
+
+```
+
+Observamos lo siguiente:
+
+1.  Mientras más minutos suceden, el ratio se duplica.
+2.  Esta duplicación se estanca para las categorías 3 y 4.
+3.  El ratio de muertes para respuestas de más de 8 minutos es muy elevado.
+
+Todo esto puede explicarse debido a que las categorías diferentes a la 0 y 5 son relativamente extrañas.
+
+Estudiaremos lo mismo pero en el caso de aquellos que sobreviven para ver si afecta o no. Emplearemos el caso de INJ_SEV == 3 y 5, pues estas pueden ser heridas importantes
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+if (!require('ggplot2')) install.packages('ggplot2'); 
+library('ggplot2')
+
+mergedData_alive <- subset(mergedData, DEATH_TM == 2)
+
+mergedData_alive_injured_3 <- subset(mergedData, INJ_SEV == 3)
+ggplot(mergedData_alive_injured_3, aes(y=(ST_CASE/sum(ST_CASE)), x=RESPONSE_CATEGORY)) + geom_col() 
+
+mergedData_alive_injured_5 <- subset(mergedData, INJ_SEV == 5)
+ggplot(mergedData_alive_injured_5, aes(y=(ST_CASE/sum(ST_CASE)), x=RESPONSE_CATEGORY)) + geom_col() 
+
+```
+
+Concluimos que la relación entre el tiempo de respuesta y el número de víctimas mortales es prácticamente inexistente, pues presentan las mismas proporciones.
+
+
+## CONCLUSIONES FINALES PREELIMINARES
+
+### PUNTOS DEL OBJETIVO ANALÍTICO
+
+El objetivo analítico comprendía lo siguiente. Se incluyen las conclusiones.
+
+#### ANALIZAR SI LOS DOS ESCENARIOS PLANTEADOS SUCEDEN
+
+1.  Algo más del 40% de implicados en accidentes mortales sobrevivieron.
+
+1.1. Sobre sus heridas:
+
+```         
+1.1.1. El 99% de los casos no sufrió heridas mortales.
+1.1.2. El 1% de los casos sufrió heridas mortales.
+```
+
+2.  Algo menos del 60% de implicados en accidentes mortales fallecen.
+
+2.1. Sobre sus heridas:
+
+```         
+2.1.1. Todos sufrieron heridas fatales.
+```
+
+Se observa por tanto que si ocurren los dos escenarios planteados: o se fallece debido a muerte cerebral instantánea o se fallece debido a parada cardíaca que lleva eventualmente a esta muerte cerebral.
+
+####  ANALIZAR SI LA FRECUENCIA DE LOS DOS ESCENARIOS ES LA HIPOTETIZADA
+
+1.  Aproximadamente un 40% de fallecidos murió debido a sus heridas.
+2.  Aproximadamente un 60% de los fallecidos murió de forma instanánea.
+
+La frecuencia planteada es incorrecta: los casos más frecuentes son aquellos que mueren de forma instantánea.
+
+####  ANALIZAR LA DISTRIBUCIÓN DE LOS TIEMPOS DE RESPUESTA DE LOS SERVICIOS DE EMERGENCIA EN BASE A LOS TIEMPOS NECESARIOS PARA UNA CORRECTA REVERSIÓN DE LA PARADA CARDÍACA
+
+1.  Un 8% se encuentra dentro del límite establecido (menos de 6 minutos).
+2.  Un 14% se encuentra en el rango de posible resurección (menos de 8 minutos).
+3.  En el 31% de los casos se supera la posible resurección.
+4.  Más de la mitad de los casos no es posible determinar cuando llegan los servicios de emergencia.
+
+4.1. La sospecha de esto es debido a dos casos:
+
+```         
+4.1.1. Atropellos de peatones con fuga del conductor sin notificar a los servicios de emergencia (23% de los casos).
+4.1.2. Siniestro de cero o dos vehículos en una área remota poco transitada.
+```
+
+La gran mayoría de tiempos de respuesta no entran del posible rango de resurección y aquellos que lo consigue no pueden reanimar a la víctima satisfactoriamente.
+
+####  ANALIZAR SI HAY UNA CORRELACIÓN ENTRE LOS TIEMPOS DE RESPUESTA Y EL AUMENTO DE VÍCTIMAS MORTALES DE UN ACCIDENTE DE TRÁFICO
+
+No existe tal correlación, lo único que afecta en la fatalidad de un accidente es el tipo de herida producida por este: si esta es fatal, no se puede intervenir.
+
+## CONCLUSIÓN FINAL
+
+Concluimos que la hipótesis plantead es parcialmente cierta. Se acertó en que la causa de fatalidades es el grado de la herida producida por el accidente en cuestión pero no en la frecuencia de los casos planteados. Además, se demuestra que una vez ocurre una herida de semejante calibre, no es posible revertir el daño hecho.
+
+Además, se ha encontrado una posible correlación entre accidentes mortales y temperatura, pero esto se realizará en un futuro estudio paralelo a este.
